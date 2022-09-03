@@ -1,6 +1,6 @@
 import cv2
 import numpy as np
-from imread_from_url import imread_from_url
+# from imread_from_url import imread_from_url
 
 from crestereo import CREStereo
 
@@ -18,12 +18,21 @@ version = "combined" # The combined version does 2 passes, one to get an initial
 model_path = f'models/crestereo_{version}_iter{iters}_{shape[0]}x{shape[1]}.onnx'
 depth_estimator = CREStereo(model_path)
 
-# Load images
-left_img = imread_from_url("https://vision.middlebury.edu/stereo/data/scenes2003/newdata/cones/im2.png")
-right_img = imread_from_url("https://vision.middlebury.edu/stereo/data/scenes2003/newdata/cones/im6.png")
+# # Load images
+# left_img = imread_from_url("https://vision.middlebury.edu/stereo/data/scenes2003/newdata/cones/im2.png")
+# right_img = imread_from_url("https://vision.middlebury.edu/stereo/data/scenes2003/newdata/cones/im6.png")
+left_img = cv2.imread("/home/dji/output/stereo_calib/left_0.png")
+right_img = cv2.imread("/home/dji/output/stereo_calib/right_0.png")
 
 # Estimate the depth
 disparity_map = depth_estimator(left_img, right_img)
+import time
+s = time.time()
+iters = 100
+for i in range(iters):
+	disparity_map = depth_estimator(left_img, right_img)
+e = time.time() - s
+print(f"Avg inference time: {e/iters*1000:.1f}")
 
 color_disparity = depth_estimator.draw_disparity()
 combined_image = np.hstack((left_img, color_disparity))
