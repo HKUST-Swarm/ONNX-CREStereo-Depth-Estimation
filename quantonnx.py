@@ -5,7 +5,7 @@ model_quant = "models/crestereo_combined_iter5_240x320_quant.onnx"
 augmented_model_path = "models/crestereo_combined_iter5_240x320_augmented_model.onnx"
 # quantized_model = quantize_dynamic(model_fp32, model_quant, weight_type=QuantType.QUInt8)
 
-from onnxruntime.quantization import quantize_static, CalibrationDataReader, QuantType, create_calibrator, write_calibration_table
+from onnxruntime.quantization import quantize_static, CalibrationDataReader, QuantType, create_calibrator, write_calibration_table, CalibrationMethod
 import os
 import numpy as np
 import cv2 as cv
@@ -38,27 +38,27 @@ def preprocess_image(image_path, image_path_r, height, width, channels=3):
     data = prepare_input(img_l, img_r, width, height)
     return data
     
-def preprocess_func(images_folder, height, width, size_limit=0):
-    image_names = os.listdir(images_folder)
-    if size_limit > 0 and len(image_names) >= size_limit:
-        batch_filenames = [image_names[i] for i in range(size_limit)]
-    else:
-        batch_filenames = image_names
+def preprocess_func(image_names, height, width, size_limit=0):
     unconcatenated_batch_data = []
-
-    for image_name in batch_filenames:
-        if "left" in image_name:
-            image_filepath_left = images_folder + '/' + image_name
-            image_filepath_right = images_folder + '/' + image_name.replace("left", "right")
-            image_data = preprocess_image(image_filepath_left, image_filepath_right, height, width)
-            unconcatenated_batch_data.append(image_data)
+    for image_filepath_left, image_filepath_right in image_names:
+        image_data = preprocess_image(image_filepath_left, image_filepath_right, height, width)
+        unconcatenated_batch_data.append(image_data)
     # batch_data = np.concatenate(np.expand_dims(unconcatenated_batch_data, axis=0), axis=0)
     return unconcatenated_batch_data
 
+def get_image_names(images_folder):
+    names = []
+    image_names = os.listdir(images_folder)
+    for image_name in image_names:
+        if "left" in image_name:
+            image_filepath_left = images_folder + '/' + image_name
+            image_filepath_right = images_folder + '/' + image_name.replace("left", "right")
+            names.append((image_filepath_left, image_filepath_right))
+    return names
 
 class StereoDataReader(CalibrationDataReader):
-    def __init__(self, calibration_image_folder):
-        self.image_folder = calibration_image_folder
+    def __init__(self, image_names):
+        self.image_names = image_names
         self.preprocess_flag = True
         self.enum_data_dicts = []
         self.datasize = 0
@@ -68,26 +68,21 @@ class StereoDataReader(CalibrationDataReader):
     def get_next(self):
         if self.preprocess_flag:
             self.preprocess_flag = False
-            nhwc_data_list = preprocess_func(self.image_folder, self.image_height, self.image_width, size_limit=0)
+            nhwc_data_list = preprocess_func(self.image_names, self.image_height, self.image_width, size_limit=0)
             self.datasize = len(nhwc_data_list)
             self.enum_data_dicts = iter([{'init_left': nhwc_data[0], 'init_right': nhwc_data[1], 'next_left': nhwc_data[2], 'next_right': nhwc_data[3] } for nhwc_data in nhwc_data_list])
         return next(self.enum_data_dicts, None)
 
-calibration_data_folder = "/home/dji/output/stereo_calib"
-dr = StereoDataReader(calibration_data_folder)
-# print("Static quantization...")
-# quantize_static(model_fp32, model_quant, dr, weight_type=QuantType.QInt8, activation_type=QuantType.QInt8)
-# print('ONNX full precision model size (MB):', os.path.getsize(model_fp32)/(1024*1024))
-# print('ONNX quantized model size (MB):', os.path.getsize(model_quant)/(1024*1024))
-
-#Quant for TensorRT
+calibration_data_folder = "/home/xuhao/output/stereo_calib"
+image_names = get_image_names(calibration_data_folder)
+calib_num = len(image_names)
+print(f"Num samples: {len(image_names)} for calib")
 print("Quantization for TensorRT...")
-import os
-os.environ["ORT_TENSORRT_FP16_ENABLE"] = "1"  # Enable FP16 precision
-os.environ["ORT_TENSORRT_INT8_ENABLE"] = "1"  # Enable INT8 precision
-os.environ["ORT_TENSORRT_INT8_CALIBRATION_TABLE_NAME"] = "calibration.flatbuffers"  # Calibration table name
-os.environ["ORT_TENSORRT_ENGINE_CACHE_ENABLE"] = "1"  # Enable engine caching
-calibrator = create_calibrator(model_fp32, [], augmented_model_path=augmented_model_path)
+stride = 5
+calibrator = create_calibrator(model_fp32, [], augmented_model_path=augmented_model_path, calibrate_method = CalibrationMethod.Entropy)
 calibrator.set_execution_providers(["CUDAExecutionProvider"])      
-calibrator.collect_data(dr)
+for i in range(0, calib_num, stride):
+    print("stride", i)
+    dr = StereoDataReader(image_names[i:i+stride])
+    calibrator.collect_data(dr)
 write_calibration_table(calibrator.compute_range())

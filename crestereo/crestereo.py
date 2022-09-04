@@ -31,7 +31,7 @@ class CREStereo():
 		self.session = onnxruntime.InferenceSession(model_path, providers=[('TensorrtExecutionProvider', {
         	'trt_fp16_enable': True,
 			'trt_engine_cache_enable': True,
-			'trt_engine_cache_path': '/home/dji/output/',
+			# 'trt_engine_cache_path': '/home/xuhao/output/',
 			# 'trt_dla_enable': True,
 			'trt_int8_enable': True,
 			# 'trt_int8_use_native_calibration_table': True,
@@ -98,12 +98,10 @@ class CREStereo():
 										            self.input_names[1]: right_tensor})[0]
 		
 	def inference_with_flow(self, left_tensor_half, right_tensor_half, left_tensor, right_tensor):
-		s = time.time()
 		ret = self.session.run(self.output_names, {self.input_names[0]: left_tensor_half,
 										            self.input_names[1]: right_tensor_half,
 													self.input_names[2]: left_tensor,
 										            self.input_names[3]: right_tensor})[0]
-		print(f"inference: {(time.time()-s)*1000:.1f}")
 		return ret
 
 	def process_output(self, output): 
@@ -121,7 +119,7 @@ class CREStereo():
 		norm_disparity_map = 255*((disparity_map-np.min(disparity_map))/
 								  (np.max(disparity_map)-np.min(disparity_map)))
 
-		return cv2.applyColorMap(cv2.convertScaleAbs(norm_disparity_map,1), cv2.COLORMAP_MAGMA)
+		return cv2.applyColorMap(cv2.convertScaleAbs(norm_disparity_map,1), cv2.COLORMAP_JET)
 
 	def draw_depth(self):
 		

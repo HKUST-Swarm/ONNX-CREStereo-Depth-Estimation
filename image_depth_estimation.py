@@ -1,7 +1,7 @@
 import cv2
 import numpy as np
 # from imread_from_url import imread_from_url
-
+import os
 from crestereo import CREStereo
 
 # Model Selection options (not all options supported together)
@@ -18,11 +18,16 @@ version = "combined" # The combined version does 2 passes, one to get an initial
 model_path = f'models/crestereo_{version}_iter{iters}_{shape[0]}x{shape[1]}.onnx'
 depth_estimator = CREStereo(model_path)
 
+# os.environ["ORT_TENSORRT_FP16_ENABLE"] = "1"  # Enable FP16 precision
+# os.environ["ORT_TENSORRT_INT8_ENABLE"] = "1"  # Enable INT8 precision
+# os.environ["ORT_TENSORRT_INT8_CALIBRATION_TABLE_NAME"] = "calibration.flatbuffers"  # Calibration table name
+# os.environ["ORT_TENSORRT_ENGINE_CACHE_ENABLE"] = "1"  # Enable engine caching
+
 # # Load images
 # left_img = imread_from_url("https://vision.middlebury.edu/stereo/data/scenes2003/newdata/cones/im2.png")
 # right_img = imread_from_url("https://vision.middlebury.edu/stereo/data/scenes2003/newdata/cones/im6.png")
-left_img = cv2.imread("/home/dji/output/stereo_calib/left_0.png")
-right_img = cv2.imread("/home/dji/output/stereo_calib/right_0.png")
+left_img = cv2.imread("/home/xuhao/output/stereo_calib/left_3.png")
+right_img = cv2.imread("/home/xuhao/output/stereo_calib/right_3.png")
 
 # Estimate the depth
 disparity_map = depth_estimator(left_img, right_img)
